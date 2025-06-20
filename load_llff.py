@@ -42,7 +42,7 @@ def _minify(basedir, factors=[], resolutions=[]):
         print('Minifying', r, basedir)
         
         os.makedirs(imgdir)
-        check_output('cp {}/* {}'.format(imgdir_orig, imgdir), shell=True)
+        # check_output('cp {}/* {}'.format(imgdir_orig, imgdir), shell=True) #windows下使用cp命令会报错，另外写了一个文件实现下采样
         
         ext = imgs[0].split('.')[-1]
         args = ' '.join(['mogrify', '-resize', resizearg, '-format', 'png', '*.{}'.format(ext)])
@@ -107,7 +107,7 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
     
     def imread(f):
         if f.endswith('png'):
-            return imageio.imread(f, ignoregamma=True)
+            return imageio.imread(f, apply_gamma=True)
         else:
             return imageio.imread(f)
         

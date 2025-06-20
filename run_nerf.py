@@ -8,8 +8,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm, trange
-
 import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
 
 from run_nerf_helpers import *
 
@@ -532,11 +532,13 @@ def config_parser():
 
 
 def train():
-
     parser = config_parser()
     args = parser.parse_args()
 
-    # Load data
+    # 初始化TensorBoard
+    writer = SummaryWriter(log_dir=os.path.join(args.basedir, args.expname, 'tensorboard'))
+    
+    # 加载数据
     K = None
     if args.dataset_type == 'llff':
         images, poses, bds, render_poses, i_test = load_llff_data(args.datadir, args.factor,
@@ -704,8 +706,9 @@ def train():
     print('TEST views are', i_test)
     print('VAL views are', i_val)
 
-    # Summary writers
-    # writer = SummaryWriter(os.path.join(basedir, 'summaries', expname))
+    # Summary
+    writer.add_text('args', str(args))
+    writer.add_text('model', str(render_kwargs_train['network_fn']))
     
     start = start + 1
     for i in trange(start, N_iters):
@@ -823,53 +826,42 @@ def train():
                 render_path(torch.Tensor(poses[i_test]).to(device), hwf, K, args.chunk, render_kwargs_test, gt_imgs=images[i_test], savedir=testsavedir)
             print('Saved test set')
 
-
-    
         if i%args.i_print==0:
             tqdm.write(f"[TRAIN] Iter: {i} Loss: {loss.item()}  PSNR: {psnr.item()}")
-        """
-            print(expname, i, psnr.numpy(), loss.numpy(), global_step.numpy())
-            print('iter time {:.05f}'.format(dt))
-
-            with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_print):
-                tf.contrib.summary.scalar('loss', loss)
-                tf.contrib.summary.scalar('psnr', psnr)
-                tf.contrib.summary.histogram('tran', trans)
-                if args.N_importance > 0:
-                    tf.contrib.summary.scalar('psnr0', psnr0)
-
-
-            if i%args.i_img==0:
-
-                # Log a rendered validation view to Tensorboard
-                img_i=np.random.choice(i_val)
-                target = images[img_i]
-                pose = poses[img_i, :3,:4]
+            
+            # 记录到TensorBoard
+            writer.add_scalar('Loss/train', loss.item(), i)
+            writer.add_scalar('PSNR/train', psnr.item(), i)
+            if 'rgb0' in extras:
+                writer.add_scalar('Loss/train_fine', img_loss0.item(), i)
+                writer.add_scalar('PSNR/train_fine', psnr0.item(), i)
+            
+            # 记录学习率
+            writer.add_scalar('Learning_rate', new_lrate, i)
+            
+            # 记录渲染结果
+            if i % args.i_img == 0:
+                # 获取一个测试视角的渲染结果
                 with torch.no_grad():
-                    rgb, disp, acc, extras = render(H, W, focal, chunk=args.chunk, c2w=pose,
-                                                        **render_kwargs_test)
-
-                psnr = mse2psnr(img2mse(rgb, target))
-
-                with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_img):
-
-                    tf.contrib.summary.image('rgb', to8b(rgb)[tf.newaxis])
-                    tf.contrib.summary.image('disp', disp[tf.newaxis,...,tf.newaxis])
-                    tf.contrib.summary.image('acc', acc[tf.newaxis,...,tf.newaxis])
-
-                    tf.contrib.summary.scalar('psnr_holdout', psnr)
-                    tf.contrib.summary.image('rgb_holdout', target[tf.newaxis])
-
-
-                if args.N_importance > 0:
-
-                    with tf.contrib.summary.record_summaries_every_n_global_steps(args.i_img):
-                        tf.contrib.summary.image('rgb0', to8b(extras['rgb0'])[tf.newaxis])
-                        tf.contrib.summary.image('disp0', extras['disp0'][tf.newaxis,...,tf.newaxis])
-                        tf.contrib.summary.image('z_std', extras['z_std'][tf.newaxis,...,tf.newaxis])
-        """
+                    rgb, disp, acc, extras = render(H, W, K, chunk=args.chunk, c2w=poses[i_test[0]][:3,:4], **render_kwargs_test)
+                writer.add_image('Render/rgb', rgb.permute(2,0,1), i)
+                writer.add_image('Render/disp', disp.unsqueeze(0), i)
+                writer.add_image('Render/acc', acc.unsqueeze(0), i)
+                
+                # 记录网络参数分布
+                for name, param in render_kwargs_train['network_fn'].named_parameters():
+                    # 检查参数是否有效
+                    if param.data.numel() > 0 and not torch.isnan(param.data).any() and not torch.isinf(param.data).any():
+                        writer.add_histogram(f'Parameters/{name}', param.data, i)
+                    
+                    # 检查梯度是否有效
+                    if param.grad is not None and param.grad.numel() > 0:
+                        if not torch.isnan(param.grad).any() and not torch.isinf(param.grad).any():
+                            writer.add_histogram(f'Gradients/{name}', param.grad.data, i)
 
         global_step += 1
+
+    writer.close()
 
 
 if __name__=='__main__':
