@@ -7,12 +7,6 @@
 
 This project is a faithful PyTorch implementation of [NeRF](http://www.matthewtancik.com/nerf) that **reproduces** the results while running **1.3 times faster**. The code is based on authors' Tensorflow implementation [here](https://github.com/bmild/nerf), and has been tested to match it numerically.
 
-## 新增功能
-
-- ✅ **测试集PSNR计算**: 训练过程中自动计算测试集PSNR并记录到TensorBoard
-- ✅ **数据预处理工具**: 提供 `data.py`脚本对自定义图像进行下采样处理
-- ✅ **完整的LLFF数据格式说明**: 详细说明如何准备自己的数据
-
 ## Installation
 
 ```
@@ -43,31 +37,8 @@ You will also need the [LLFF code](http://github.com/fyusion/llff) (and COLMAP) 
 
 ## 准备自己的数据
 
-### 第一步：图像下采样预处理
 
-如果你有自己的图像数据，可以使用提供的 `data.py`脚本进行下采样处理：
-
-1. **修改 `data.py`中的路径**：
-
-```python
-# 修改输入图像路径
-dir_path = 'your/input/images/path'
-input_path = "your/input/images/path"
-output_path = "your/output/images/path"
-
-# 设置下采样倍数
-n = 8  # 8倍下采样，可选择4或8
-```
-
-2. **运行下采样脚本**：
-
-```bash
-python data.py
-```
-
-这将把原始图像下采样8倍（或4倍），显著减少训练时间。
-
-### 第二步：LLFF数据格式准备
+### LLFF数据格式准备
 
 要使用自己的数据训练NeRF，需要准备符合LLFF格式的数据。以 `data/nerf_llff_data/input_earth`为例，完整的LLFF数据文件夹应包含：
 
